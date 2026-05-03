@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <stdbool.h> // true/false değişkenleri için
+#include <stdbool.h>
 
 int main()
 {
@@ -18,24 +18,26 @@ int main()
     if (!font)
     {
         printf("HATA: impact.ttf dosyasi klasorde bulunamadi!\n");
-        return 1; // Font yoksa programı kapat
+        return 1;
     }
 
     sfText *scoreText = sfText_create();
     sfText_setFont(scoreText, font);
     sfText_setCharacterSize(scoreText, 30);
 
-    // --- YENİ TASARIM BURADA ---
-    sfText_setFillColor(scoreText, sfBlack);     // Yazının içi SİYAH
-    sfText_setOutlineColor(scoreText, sfWhite);  // Yazının dış çerçevesi BEYAZ
-    sfText_setOutlineThickness(scoreText, 2.0f); // Çerçeve kalınlığı (2 piksel, istersen artırabilirsin)
-
-    sfText_setPosition(scoreText, (sfVector2f){20.0f, 20.0f}); // Sol üst köşe
+    // Yazı tasarımı: İçi SİYAH, Çerçevesi BEYAZ
+    sfText_setFillColor(scoreText, sfBlack);
+    sfText_setOutlineColor(scoreText, sfWhite);
+    sfText_setOutlineThickness(scoreText, 2.0f);
+    sfText_setPosition(scoreText, (sfVector2f){20.0f, 20.0f});
 
     int score = 0;
     int highScore = 0;
-    bool scoredThisPipe = false; // O anki borudan puan alıp almadığımızı kontrol eder
-    char scoreString[100];       // Ekrana yazdıracağımız metni tutacak dizi
+    bool scoredThisPipe = false;
+    char scoreString[100];
+
+    // --- YENİ: OYUN DURUMU DEĞİŞKENİ ---
+    bool gameStarted = false; // Oyun başlangıçta duraklatılmış halde başlar
 
     // --- KUŞ DEĞİŞKENLERİ ---
     sfRectangleShape *bird = sfRectangleShape_create();
@@ -69,31 +71,38 @@ int main()
             if (event.type == sfEvtClosed)
                 sfRenderWindow_close(window);
 
+            // Space tuşuna basıldığında
             if (event.type == sfEvtKeyPressed && event.key.code == sfKeySpace)
             {
+                // Eğer oyun henüz başlamadıysa başlat
+                if (!gameStarted)
+                {
+                    gameStarted = true;
+                }
+                // Kuşu zıplat (Oyun yeni başlamış olsa da, devam ediyor olsa da zıplar)
                 velocity = jump_power;
             }
         }
 
-        // --- FİZİK VE HAREKET ---
-        velocity += gravity;
-        birdY += velocity;
-        pipeX -= pipeSpeed;
-
-        // Boru ekrandan çıkarsa başa sar
-        if (pipeX < -pipeWidth)
+        // --- FİZİK VE HAREKET (SADECE OYUN BAŞLADIYSA ÇALIŞIR) ---
+        if (gameStarted)
         {
-            pipeX = 800.0f;
-            topPipeHeight = (rand() % 250) + 100.0f;
-            scoredThisPipe = false; // Yeni boru geldi, henüz puan almadık
-        }
+            velocity += gravity;
+            birdY += velocity;
+            pipeX -= pipeSpeed;
 
-        // --- SKOR KONTROLÜ ---
-        // Eğer kuş boruyu sağa doğru geçtiyse ve henüz bu borudan puan almadıysak
-        if (birdX > pipeX + pipeWidth && !scoredThisPipe)
-        {
-            score++;
-            scoredThisPipe = true; // Puanı aldığımızı işaretle (birden fazla saymasın)
+            if (pipeX < -pipeWidth)
+            {
+                pipeX = 800.0f;
+                topPipeHeight = (rand() % 250) + 100.0f;
+                scoredThisPipe = false;
+            }
+
+            if (birdX > pipeX + pipeWidth && !scoredThisPipe)
+            {
+                score++;
+                scoredThisPipe = true;
+            }
         }
 
         // --- POZİSYONLARI GÜNCELLE ---
@@ -111,28 +120,37 @@ int main()
         sfFloatRect topRect = sfRectangleShape_getGlobalBounds(topPipe);
         sfFloatRect bottomRect = sfRectangleShape_getGlobalBounds(bottomPipe);
 
-        if (sfFloatRect_intersects(&birdRect, &topRect, NULL) ||
-            sfFloatRect_intersects(&birdRect, &bottomRect, NULL) ||
-            birdY > 600.0f || birdY < 0.0f)
+        // Eğer oyundayken bir yere çarparsan
+        if (gameStarted && (sfFloatRect_intersects(&birdRect, &topRect, NULL) ||
+                            sfFloatRect_intersects(&birdRect, &bottomRect, NULL) ||
+                            birdY > 600.0f || birdY < 0.0f))
         {
 
-            // Eğer mevcut skor en yüksek skordan fazlaysa, en yüksek skoru güncelle
             if (score > highScore)
             {
                 highScore = score;
             }
 
-            // Oyunu sıfırla
+            // Oyunu başlangıç durumuna (bekleme moduna) sıfırla
             birdY = 300.0f;
             velocity = 0.0f;
             pipeX = 800.0f;
             score = 0;
             scoredThisPipe = false;
+            gameStarted = false; // YANDIKTAN SONRA TEKRAR BEKLEME MODUNA GEÇ
         }
 
         // --- METNİ GÜNCELLE ---
-        // Skoru string (metin) formatına çeviriyoruz
-        sprintf(scoreString, "Skor: %d | En Yuksek: %d", score, highScore);
+        if (!gameStarted && score == 0)
+        {
+            // Başlangıç ekranındayken bilgi verelim
+            sprintf(scoreString, "Baslamak Icin SPACE'e Bas!\nEn Yuksek: %d", highScore);
+        }
+        else
+        {
+            // Oyun içindeyken skoru göster
+            sprintf(scoreString, "Skor: %d | En Yuksek: %d", score, highScore);
+        }
         sfText_setString(scoreText, scoreString);
 
         // --- ÇİZİM AŞAMASI ---
@@ -141,7 +159,7 @@ int main()
         sfRenderWindow_drawRectangleShape(window, topPipe, NULL);
         sfRenderWindow_drawRectangleShape(window, bottomPipe, NULL);
         sfRenderWindow_drawRectangleShape(window, bird, NULL);
-        sfRenderWindow_drawText(window, scoreText, NULL); // Metni ekrana çiz
+        sfRenderWindow_drawText(window, scoreText, NULL);
 
         sfRenderWindow_display(window);
     }
